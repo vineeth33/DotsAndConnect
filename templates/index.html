@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modern Dots and Boxes</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --background-color: #1a1b2e;
+            --primary-color: #232544;
+            --accent-color: #e94560;
+            --text-color: #ffffff;
+            --player-color: #4ade80;
+            --ai-color: #ff00ff;
+            --grid-color: #2a2d5a;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: var(--background-color);
+            color: var(--text-color);
+        }
+
+        .game-container {
+            background-color: var(--primary-color);
+            border-radius: 24px;
+            padding: 2rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            max-width: 90vw;
+        }
+
+        h1 {
+            color: var(--accent-color);
+            margin-bottom: 2rem;
+            font-size: 2.5rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .score-container {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .score {
+            font-size: 1.2rem;
+            font-weight: bold;
+            padding: 0.5rem 1.5rem;
+            border-radius: 50px;
+            color: var(--primary-color);
+        }
+
+        #human-score {
+            background-color: var(--ai-color);
+        }
+
+        #ai-score {
+            background-color: var(--player-color);
+        }
+
+        #current-player {
+            font-size: 1.5rem;
+            margin-bottom: 2rem;
+            color: var(--accent-color);
+        }
+
+        .grid {
+            display: grid;
+            gap: 0;
+            margin: 2rem auto;
+            background-color: var(--grid-color);
+            padding: 1.5rem;
+            border-radius: 12px;
+            width: fit-content;
+        }
+
+        .cell {
+            width: 30px;
+            height: 30px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            background-color: var(--accent-color);
+            border-radius: 50%;
+        }
+
+        .line {
+            position: absolute;
+            background-color: rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .line:hover {
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .line.active.human {
+            background-color:  var(--player-color);
+        }
+
+        .line.active.ai {
+            background-color: var(--ai-color);
+        }
+
+        .horizontal {
+            height: 4px;
+            width: calc(100% + 4px);
+            left: -2px;
+        }
+
+        .vertical {
+            width: 4px;
+            height: calc(100% + 4px);
+            top: -2px;
+        }
+
+        .box {
+            background-color: transparent;
+            transition: background-color 0.3s;
+        }
+
+        .box.human {
+            background-color: rgba(255, 0, 255, 0.2);
+
+        }
+
+        .box.ai {
+            background-color: rgba(74, 222, 128, 0.2);
+        }
+
+        .button {
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 0.8rem 2rem;
+            font-size: 1.1rem;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: transform 0.2s ease, background-color 0.2s ease;
+            margin-top: 1rem;
+        }
+
+        .button:hover {
+            transform: scale(1.05);
+            background-color: #ff4f6e;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        .active-player {
+            animation: pulse 2s infinite;
+        }
+
+        .difficulty-container {
+            margin-top: 1rem;
+        }
+
+        .difficulty-button {
+            background-color: var(--grid-color);
+            color: var(--text-color);
+            border: none;
+            padding: 0.5rem 1rem;
+            margin: 0 0.5rem;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        .difficulty-button.active {
+            background-color: var(--accent-color);
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>Dots and Boxes</h1>
+        <div class="score-container">
+            <div class="score" id="human-score">Human: 0</div>
+            <div class="score" id="ai-score">AI: 0</div>
+        </div>
+        <div id="current-player">Your Turn</div>
+        <div class="grid" id="game-grid"></div>
+        <button id="reset-button" class="button">Reset Game</button>
+        <div class="difficulty-container">
+            <button class="difficulty-button" data-difficulty="easy">Easy</button>
+            <button class="difficulty-button active" data-difficulty="medium">Medium</button>
+            <button class="difficulty-button" data-difficulty="hard">Hard</button>
+        </div>
+    </div>
+
+    <script>
+        const GRID_SIZE = {{ grid_size }};
+        let currentPlayer = 'human';
+        let gameOver = false;
+        let isProcessingMove = false;
+
+        // Sound effects
+        const connectSound = new Audio('/static/connect-sound.mp3');
+        const boxCompleteSound = new Audio('/static/box-complete-sound.mp3');
+        const gameOverSound = new Audio('/static/game-over-sound.mp3');
+
+        function initializeSounds() {
+            document.body.addEventListener('click', () => {
+                connectSound.play().then(() => {
+                    connectSound.pause();
+                    connectSound.currentTime = 0;
+                }).catch(error => console.log('Audio play failed:', error));
+                boxCompleteSound.play().then(() => {
+                    boxCompleteSound.pause();
+                    boxCompleteSound.currentTime = 0;
+                }).catch(error => console.log('Audio play failed:', error));
+                gameOverSound.play().then(() => {
+                    gameOverSound.pause();
+                    gameOverSound.currentTime = 0;
+                }).catch(error => console.log('Audio play failed:', error));
+            }, { once: true });
+        }
+
+        function createGrid() {
+            const grid = document.getElementById('game-grid');
+            grid.style.gridTemplateColumns = `repeat(${GRID_SIZE * 2 + 1}, 30px)`;
+
+            for (let i = 0; i <= GRID_SIZE * 2; i++) {
+                for (let j = 0; j <= GRID_SIZE * 2; j++) {
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+
+                    if (i % 2 === 0 && j % 2 === 0) {
+                        const dot = document.createElement('div');
+                        dot.className = 'dot';
+                        cell.appendChild(dot);
+                    } else if (i % 2 === 1 && j % 2 === 0) {
+                        const line = document.createElement('div');
+                        line.className = 'line vertical';
+                        line.dataset.row = Math.floor(i/2);
+                        line.dataset.col = j/2;
+                        line.dataset.isHorizontal = 'false';
+                        line.onclick = () => makeMove(line);
+                        cell.appendChild(line);
+                    } else if (i % 2 === 0 && j % 2 === 1) {
+                        const line = document.createElement('div');
+                        line.className = 'line horizontal';
+                        line.dataset.row = i/2;
+                        line.dataset.col = Math.floor(j/2);
+                        line.dataset.isHorizontal = 'true';
+                        line.onclick = () => makeMove(line);
+                        cell.appendChild(line);
+                    } else {
+                        cell.className = 'cell box';
+                    }
+
+                    grid.appendChild(cell);
+                }
+            }
+        }
+
+        async function makeMove(lineElement) {
+            if (gameOver || currentPlayer !== 'human' || lineElement.classList.contains('active') || isProcessingMove) {
+                return;
+            }
+
+            isProcessingMove = true;
+            const row = parseInt(lineElement.dataset.row);
+            const col = parseInt(lineElement.dataset.col);
+            const isHorizontal = lineElement.dataset.isHorizontal === 'true';
+
+            try {
+                const response = await fetch('/make_move', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ row, col, isHorizontal }),
+                });
+
+                const data = await response.json();
+                updateGameState(data);
+
+                if (data.gameOver) {
+                    handleGameOver(data);
+                }
+
+                isProcessingMove = false;
+            } catch (error) {
+                console.error('Error:', error);
+                isProcessingMove = false;
+            }
+        }
+
+        function updateGameState(data) {
+            const lines = document.querySelectorAll('.line');
+            const previousBoxes = document.querySelectorAll('.box.human, .box.ai');
+            const previousBoxCount = previousBoxes.length;
+
+            lines.forEach(line => {
+                const row = parseInt(line.dataset.row);
+                const col = parseInt(line.dataset.col);
+                const isHorizontal = line.dataset.isHorizontal === 'true';
+                if ((isHorizontal && (data.grid[row][col] & 1)) || (!isHorizontal && (data.grid[row][col] & 2))) {
+                    if (!line.classList.contains('active')) {
+                        line.classList.add('active');
+                        connectSound.play();
+                    }
+                    // Add player-specific color
+                    if (data.lastMove && data.lastMove[0] === row && data.lastMove[1] === col && data.lastMove[2] === isHorizontal) {
+                        line.classList.add(currentPlayer);
+                    } else if (!line.classList.contains('human') && !line.classList.contains('ai')) {
+                        line.classList.add(currentPlayer === 'human' ? 'ai' : 'human');
+                    }
+                }
+            });
+
+            const boxes = document.querySelectorAll('.box');
+            data.boxes.flat().forEach((value, index) => {
+                boxes[index].className = 'cell box';
+                if (value === 1) {
+                    boxes[index].classList.add('human');
+                } else if (value === 2) {
+                    boxes[index].classList.add('ai');
+                }
+            });
+
+            const newBoxes = document.querySelectorAll('.box.human, .box.ai');
+            if (newBoxes.length > previousBoxCount) {
+                boxCompleteSound.play();
+            }
+
+            document.getElementById('human-score').textContent = `Human: ${data.scores[0]}`;
+            document.getElementById('ai-score').textContent = `AI: ${data.scores[1]}`;
+
+            currentPlayer = data.currentPlayer;
+            const playerElement = document.getElementById('current-player');
+            playerElement.textContent = gameOver ? 'Game Over!' : (currentPlayer === 'human' ? 'Your Turn' : 'AI\'s Turn');
+            
+            const humanScore = document.getElementById('human-score');
+            const aiScore = document.getElementById('ai-score');
+            humanScore.classList.toggle('active-player', currentPlayer === 'human');
+            aiScore.classList.toggle('active-player', currentPlayer === 'ai');
+        }
+
+        function handleGameOver(data) {
+            gameOver = true;
+            const winner = data.scores[0] > data.scores[1] ? 'Human' : 
+                           data.scores[1] > data.scores[0] ? 'AI' : 'Nobody';
+            
+            gameOverSound.play();
+            setTimeout(() => {
+                alert(`Game Over! ${winner} wins!`);
+            }, 100);
+        }
+
+        async function resetGame() {
+            try {
+                const response = await fetch('/reset_game', { method: 'POST' });
+                const data = await response.json();
+                
+                if (data.message === 'Game reset successfully') {
+                    location.reload();
+                }
+            } catch (error) {
+                console.error('Error resetting game:', error);
+            }
+        }
+
+        async function setDifficulty(difficulty) {
+            try {
+                const response = await fetch('/set_difficulty', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ difficulty }),
+                });
+                const data = await response.json();
+                
+                if (data.message) {
+                    console.log(data.message);
+                    updateDifficultyButtons(difficulty);
+                }
+            } catch (error) {
+                console.error('Error setting difficulty:', error);
+            }
+        }
+
+        function updateDifficultyButtons(activeDifficulty) {
+            const buttons = document.querySelectorAll('.difficulty-button');
+            buttons.forEach(button => {
+                button.classList.toggle('active', button.dataset.difficulty === activeDifficulty);
+            });
+        }
+
+        document.getElementById('reset-button').addEventListener('click', resetGame);
+
+        document.querySelectorAll('.difficulty-button').forEach(button => {
+            button.addEventListener('click', () => setDifficulty(button.dataset.difficulty));
+        });
+
+        // Initialize the game
+        createGrid();
+        initializeSounds();
+    </script>
+</body>
+</html>
